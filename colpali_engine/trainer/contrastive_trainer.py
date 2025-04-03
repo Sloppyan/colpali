@@ -12,6 +12,10 @@ class ContrastiveTrainer(Trainer):
         query_outputs = model(input_ids=inputs["query_input_ids"], attention_mask=inputs["query_attention_mask"])
         # feed only kwargs with 'doc_' prefix
         doc_outputs = model(**{k[4:]: v for k, v in inputs.items() if k.startswith("doc")})
+        # query_input_ids = inputs["query_input_ids"]
+        # print(f"query_input_ids.shape: {query_input_ids.shape}")
+        # print(f"doc_outputs.shape: {doc_outputs.shape}")
+        # print(f"query_outputs.shape: {query_outputs.shape}")
         if "neg_doc_input_ids" in inputs:
             neg_doc_outputs = model(**{k[8:]: v for k, v in inputs.items() if k.startswith("neg_doc")})
             loss = self.loss_func(query_outputs, doc_outputs, neg_doc_outputs)

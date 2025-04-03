@@ -1,0 +1,33 @@
+config:
+  (): colpali_engine.trainer.colmodel_training.ColModelTrainingConfig
+  output_dir: !path ../../../outputs/train_blip2
+  processor:
+    (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
+    class_to_instanciate: !ext colpali_engine.models.ColBlip2Processor
+    pretrained_model_name_or_path: "./models/blip2-flan-t5-xl"
+    max_length: 64
+  model:
+    (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
+    class_to_instanciate: !ext colpali_engine.models.ColBlip2
+    pretrained_model_name_or_path: "./models/blip2-flan-t5-xl"
+    torch_dtype: !ext torch.float16
+    device_map: "auto"
+
+  dataset_loading_func: !ext colpali_engine.utils.dataset_transformation.load_train_set
+  eval_dataset_loader: !import ../data/test_data.yaml
+
+  max_length: 64
+  run_eval: true
+  loss_func:
+    (): colpali_engine.loss.bi_encoder_losses.BiEncoderLoss
+  tr_args: !import ../tr_args/default_tr_args.yaml
+  peft_config:
+    (): peft.LoraConfig
+    r: 32
+    lora_alpha: 32
+    lora_dropout: 0.1
+    init_lora_weights: "gaussian"
+    bias: "none"
+    task_type: "FEATURE_EXTRACTION"
+    target_modules: '(.*(qformer.encoder.layer).*((attention|crossattention).attention).*(query|key|value).*$|.*(query_tokens).*$|.*(custom_text_proj).*$|.*(language_projection).*$)'
+    #'(.*(language_model.decoder).*(SelfAttention|EncDecAttention).(q|k|v|o).*$|.*(custom_text_proj).*$)'
