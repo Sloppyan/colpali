@@ -16,4 +16,6 @@ from .models import (
     ColQwen2Processor,
     ColBlip2,
     ColBlip2Processor,
+    ColViT,
+    ColViTProcessor,
 )
