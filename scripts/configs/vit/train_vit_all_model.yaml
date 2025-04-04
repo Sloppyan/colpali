@@ -3,11 +3,13 @@ config:
   output_dir: !path ../../../outputs/train_vit_bert
   processor:
     (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
-    class_to_instanciate: !ext colpali_engine.models.ColViTProcessor
+    class_to_instanciate: !ext colpali_engine.models.DelegatedImageProcessor
+    pretrained_model_name_or_path: "D:\\colpali\\colpali_engine\\models\\vit-base-patch16-224-in21k\\"
     max_length: 64
   model:
     (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
     class_to_instanciate: !ext colpali_engine.models.ColViT
+    pretrained_model_name_or_path: "D:\\colpali\\colpali_engine\\models\\vit-base-patch16-224-in21k\\"
     torch_dtype: !ext torch.float16
     device_map: "auto"
 
@@ -27,4 +29,6 @@ config:
     init_lora_weights: "gaussian"
     bias: "none"
     task_type: "FEATURE_EXTRACTION"
-    target_modules: '(.*(vit.encoder.layer).*((attention).attention).*(query|key|value).*$|.*(bert.embeddings).*$|.*(language_projection).*$)'
+    target_modules: "(.*encoder.layer.*attention.attention.*(query|key|value).*$|.*(custom_text_proj|custom_vision_proj).*$)"
+
+    # target_modules: '(.*(vit.encoder.layer).*((attention).attention).*(query|key|value).*$|.*(bert.embeddings).*$|.*(language_projection).*$)'
