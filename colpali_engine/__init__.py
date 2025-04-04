@@ -20,4 +20,5 @@ from .models import (
     ColViTProcessor,
     ColLlavaI,
     ColLlavaIProcessor,
+    DelegatedImageProcessor,
 )

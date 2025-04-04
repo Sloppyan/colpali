@@ -1,2 +1,2 @@
 from .colvit.modeling_colvit import ColViT
-from .colvit.processing_colvit import ColViTProcessor
+from .colvit.processing_colvit import ColViTProcessor, DelegatedImageProcessor
