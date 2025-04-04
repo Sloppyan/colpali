@@ -30,6 +30,7 @@ config:
     (): colpali_engine.loss.bi_encoder_losses.BiEncoderLoss
   tr_args:
     (): transformers.training_args.TrainingArguments
+    # resume_from_checkpoint: "trainer_output/checkpoint-xxxxx"
     output_dir: null
     overwrite_output_dir: true
     num_train_epochs: 3
@@ -54,4 +55,24 @@ config:
     init_lora_weights: "gaussian"
     bias: "none"
     task_type: "FEATURE_EXTRACTION"
-    target_modules: '(.*(language_model).*(q_proj|k_proj|v_proj|o_proj).*$|.*(custom_text_proj).*$|.*(multi_modal_projector\.linear_1|multi_modal_projector\.linear_2).*$)'
+    # target_modules: '(.*(language_model).*(q_proj|k_proj|v_proj|o_proj).*$|.*(custom_text_proj).*$|.*(multi_modal_projector\.linear_1|multi_modal_projector\.linear_2).*$)'
+    target_modules: [
+      # 文本分支：Qwen 语言模型的注意力层
+      "language_model.*.q_proj",
+      "language_model.*.k_proj",
+      "language_model.*.v_proj",
+      "language_model.*.o_proj",
+      
+      # 多模态融合层（关键！）
+      "multi_modal_projector.linear_1",
+      "multi_modal_projector.linear_2",
+      
+      # 可选：自定义文本投影层（如果有）
+      "custom_text_proj"
+    ]
+    
+    # 预留：当内存一直不够时，可以尝试只训练文本分支的投影层
+    # target_modules: '(.*(custom_text_proj).*$)'
+    # target_modules: [
+    #   "custom_text_proj"
+    # ]
