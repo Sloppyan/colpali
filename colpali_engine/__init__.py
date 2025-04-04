@@ -18,5 +18,7 @@ from .models import (
     ColBlip2Processor,
     ColViT,
     ColViTProcessor,
+    ColLlavaI,
+    ColLlavaIProcessor,
     DelegatedImageProcessor,
 )

@@ -1,0 +1,78 @@
+config:
+  (): colpali_engine.trainer.colmodel_training.ColModelTrainingConfig
+  output_dir: !path ../../../models/colllavai
+  processor:
+    (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
+    class_to_instanciate: !ext colpali_engine.models.ColLlavaIProcessor
+    pretrained_model_name_or_path: "llava-hf/llava-interleave-qwen-0.5b-hf"
+    max_length: 64
+  model:
+    (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
+    class_to_instanciate: !ext colpali_engine.models.ColLlavaI
+    pretrained_model_name_or_path: "llava-hf/llava-interleave-qwen-0.5b-hf"
+    torch_dtype: !ext torch.float32
+    device_map: "cpu"
+    # Comment out the quantization_config section
+    # quantization_config:
+    #   (): transformers.BitsAndBytesConfig
+    #   load_in_4bit: true
+    #   bnb_4bit_quant_type: "nf4"
+    #   bnb_4bit_compute_dtype: "bfloat16"
+    #   bnb_4bit_use_double_quant: true
+
+  dataset_loading_func: !ext colpali_engine.utils.dataset_transformation.load_train_set
+  eval_dataset_loader: !import ../data/test_data.yaml
+
+  max_length: 64
+  run_eval: true
+  
+  loss_func:
+    (): colpali_engine.loss.bi_encoder_losses.BiEncoderLoss
+  tr_args:
+    (): transformers.training_args.TrainingArguments
+    # resume_from_checkpoint: "trainer_output/checkpoint-xxxxx"
+    output_dir: null
+    overwrite_output_dir: true
+    num_train_epochs: 3
+    per_device_train_batch_size: 1
+    gradient_checkpointing: false
+    per_device_eval_batch_size: 1
+    eval_strategy: "steps"
+    dataloader_num_workers: 0
+    save_steps: 500
+    logging_steps: 10
+    eval_steps: 100
+    warmup_steps: 100
+    learning_rate: 5e-5
+    save_total_limit: 1
+    report_to: "wandb"
+    
+  peft_config:
+    (): peft.LoraConfig
+    r: 32
+    lora_alpha: 32
+    lora_dropout: 0.1
+    init_lora_weights: "gaussian"
+    bias: "none"
+    task_type: "FEATURE_EXTRACTION"
+    # target_modules: '(.*(language_model).*(q_proj|k_proj|v_proj|o_proj).*$|.*(custom_text_proj).*$|.*(multi_modal_projector\.linear_1|multi_modal_projector\.linear_2).*$)'
+    target_modules: [
+      # 文本分支：Qwen 语言模型的注意力层
+      "language_model.*.q_proj",
+      "language_model.*.k_proj",
+      "language_model.*.v_proj",
+      "language_model.*.o_proj",
+      
+      # 多模态融合层（关键！）
+      "multi_modal_projector.linear_1",
+      "multi_modal_projector.linear_2",
+      
+      # 可选：自定义文本投影层（如果有）
+      "custom_text_proj"
+    ]
+    
+    # 预留：当内存一直不够时，可以尝试只训练文本分支的投影层
+    # target_modules: '(.*(custom_text_proj).*$)'
+    # target_modules: [
+    #   "custom_text_proj"
+    # ]
