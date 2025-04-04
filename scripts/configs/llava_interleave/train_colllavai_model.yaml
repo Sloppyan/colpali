@@ -10,8 +10,8 @@ config:
     (): colpali_engine.utils.transformers_wrappers.AllPurposeWrapper
     class_to_instanciate: !ext colpali_engine.models.ColLlavaI
     pretrained_model_name_or_path: "llava-hf/llava-interleave-qwen-0.5b-hf"
-    torch_dtype: !ext torch.float32
-    device_map: "cpu"
+    torch_dtype: !ext torch.float16
+    device_map: "auto"
     # Comment out the quantization_config section
     # quantization_config:
     #   (): transformers.BitsAndBytesConfig
@@ -30,22 +30,24 @@ config:
     (): colpali_engine.loss.bi_encoder_losses.BiEncoderLoss
   tr_args:
     (): transformers.training_args.TrainingArguments
-    # resume_from_checkpoint: "trainer_output/checkpoint-xxxxx"
+    # resume_from_checkpoint: "trainer_output/checkpoint-17000"
     output_dir: null
     overwrite_output_dir: true
-    num_train_epochs: 3
-    per_device_train_batch_size: 1
-    gradient_checkpointing: false
-    per_device_eval_batch_size: 1
+    num_train_epochs: 1
+    per_device_train_batch_size: 4
+    # 6 x 8 gpus = 48 batch size
+    # gradient_accumulation_steps: 4
+    per_device_eval_batch_size: 4
     eval_strategy: "steps"
-    dataloader_num_workers: 0
+    # dataloader_num_workers: 8
+    # bf16: true
     save_steps: 500
     logging_steps: 10
-    eval_steps: 100
-    warmup_steps: 100
+    eval_steps: 1000
+    warmup_steps: 500
     learning_rate: 5e-5
     save_total_limit: 1
-    report_to: "wandb"
+    # optim: "paged_adamw_8bit"
     
   peft_config:
     (): peft.LoraConfig
@@ -67,8 +69,9 @@ config:
       "multi_modal_projector.linear_1",
       "multi_modal_projector.linear_2",
       
-      # 可选：自定义文本投影层（如果有）
-      "custom_text_proj"
+      # 自定义投影层
+      "custom_text_proj",
+      "image_proj"  # Add the new image projection layer
     ]
     
     # 预留：当内存一直不够时，可以尝试只训练文本分支的投影层

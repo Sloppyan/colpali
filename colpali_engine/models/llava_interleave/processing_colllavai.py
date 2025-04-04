@@ -26,6 +26,9 @@ class ColLlavaIProcessor(BaseVisualRetrieverProcessor, LlavaProcessor):
         self,
         images: List[Image.Image],
     ) -> BatchFeature:
+        # Convert images to RGB mode to handle grayscale images
+        images = [image.convert("RGB") for image in images]
+        
         image_features = self.image_processor(
             images, 
             return_tensors="pt",
@@ -42,37 +45,52 @@ class ColLlavaIProcessor(BaseVisualRetrieverProcessor, LlavaProcessor):
     
     def score(
         self,
-        q: torch.Tensor,
-        p: torch.Tensor,
+        qs: List[torch.Tensor],
+        ps: List[torch.Tensor],
+        device: Optional[Union[str, torch.device]] = None,
+        **kwargs,
     ) -> torch.Tensor:
         """
-        Calculate similarity score between query and passage embeddings.
-        For models like LLaVA that use bi-encoder approach, we use dot product.
+        Compute the score between query and passage embeddings.
         
         Args:
-            q: Query embeddings [batch_size, dim]
-            p: Passage embeddings [batch_size, dim]
-        
+            qs: List of query embeddings
+            ps: List of passage embeddings
+            device: Device to run computation on
+            
         Returns:
-            Similarity scores [batch_size]
+            Similarity scores
         """
-        # Simple dot product for bi-encoder scores
-        return torch.sum(q * p, dim=-1)
+        return self.score_multi_vector(qs, ps, device=device, **kwargs)
     
-    def score_multi_vector(
-        self,
-        qs: torch.Tensor,
-        ps: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Calculate similarity scores between query embeddings and passage embeddings.
+    # def score_multi_vector(
+    #     self,
+    #     qs: torch.Tensor,
+    #     ps: torch.Tensor,
+    #     device: Optional[Union[str, torch.device]] = None,
+    #     **kwargs,
+    # ) -> torch.Tensor:
+    #     """
+    #     Calculate similarity scores between query embeddings and passage embeddings.
         
-        Args:
-            qs: Query embeddings [num_queries, dim]
-            ps: Passage embeddings [num_passages, dim]
-        
-        Returns:
-            Similarity scores [num_queries, num_passages]
-        """
-        # Compute dot product between all queries and passages
-        return torch.matmul(qs, ps.t())
+    #     Args:
+    #         qs: Query embeddings tensor or list of tensors
+    #         ps: Passage embeddings tensor or list of tensors
+    #         device: Device to run computation on
+            
+    #     Returns:
+    #         Similarity scores
+    #     """
+    #     # Convert lists to tensors if needed
+    #     if isinstance(qs, list):
+    #         qs = torch.stack(qs)
+    #     if isinstance(ps, list):
+    #         ps = torch.stack(ps)
+            
+    #     # Move to device if specified
+    #     if device is not None:
+    #         qs = qs.to(device)
+    #         ps = ps.to(device)
+            
+    #     # Compute dot product between all queries and passages
+    #     return torch.matmul(qs, ps.t())

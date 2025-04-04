@@ -1,6 +1,5 @@
-from transformers import LlavaForConditionalGeneration, AutoTokenizer
+from transformers import LlavaForConditionalGeneration
 from torch import nn
-from peft import get_peft_model
 import torch
 
 class ColLlavaI(LlavaForConditionalGeneration):
@@ -9,56 +8,67 @@ class ColLlavaI(LlavaForConditionalGeneration):
         self.dim = 128
         # Add a custom projection layer for the text embeddings
         self.custom_text_proj = nn.Linear(self.config.text_config.hidden_size, self.dim)
+        # Add an image projection layer to match dimensions
+        self.image_proj = nn.Linear(self.config.text_config.hidden_size, self.dim)
     
-    def forward(self, *args, **kwargs):
-        dtype = torch.float16
+    def forward(self, input_ids=None, pixel_values=None, attention_mask=None, return_dict=True, output_hidden_states=None, **kwargs):
+        text_features = None
+        image_features = None
         
-        if "pixel_values" in kwargs:
-            # Process image input
-            pixel_values = kwargs["pixel_values"]
-            
+        # Process images if provided
+        if pixel_values is not None:
             # Process through vision encoder
-            vision_outputs = self.vision_model(
+            vision_outputs = self.vision_tower(
                 pixel_values=pixel_values,
                 return_dict=True,
             )
             image_embeds = vision_outputs.last_hidden_state
             
             # Process image embeddings through the projector
-            image_embeds = self.multi_modal_projector(image_embeds)
+            image_proj_embeds = self.multi_modal_projector(image_embeds)
             
-            # Get mean of image embeddings as the representation
-            image_attention_mask = torch.ones(image_embeds.size()[:-1], dtype=dtype, device=image_embeds.device)
+            # Mean pooling for image representation
+            pooled_image_embeds = image_proj_embeds.mean(dim=1)
             
-            # Use mean pooling for image representation
-            attention_mask_expanded = image_attention_mask.unsqueeze(-1).expand_as(image_embeds)
-            sum_embeddings = torch.sum(image_embeds * attention_mask_expanded, 1)
-            sum_mask = attention_mask_expanded.sum(1)
-            sum_mask = torch.clamp(sum_mask, min=1e-9)
-            hidden_states = sum_embeddings / sum_mask
-            
-        else:
-            # Process text input
-            input_ids = kwargs.get("input_ids")
-            if input_ids is None:
-                raise ValueError("input_ids is not in kwargs.")
-            
-            # Get text embeddings
-            text_outputs = self.language_model.model.embed_tokens(input_ids)
-            
-            # Apply attention mask if available
-            attention_mask = kwargs.get("attention_mask")
-            attention_mask = attention_mask.unsqueeze(-1).to(dtype)
-            masked_text_outputs = text_outputs * attention_mask
-            
-            # Aggregate embeddings using attention mask
-            sum_mask = attention_mask.sum(dim=1, keepdim=True)
-            text_outputs = masked_text_outputs.sum(dim=1) / sum_mask.squeeze(1)
-            hidden_states = text_outputs
-
-        # Project embeddings to common space
-        proj = self.custom_text_proj(hidden_states)
-        # L2 normalization
-        proj = proj / proj.norm(dim=-1, keepdim=True)
+            # Project to common space and normalize
+            image_features = self.image_proj(pooled_image_embeds)
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         
-        return proj
+        # Process text if provided
+        if input_ids is not None:
+            # Process through the language model to get meaningful text representations
+            text_outputs = self.language_model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+            
+            # Get the last hidden state from the language model
+            text_embeds = text_outputs.hidden_states[-1]
+            
+            # Handle attention mask for proper pooling
+            if attention_mask is not None:
+                attention_mask = attention_mask.unsqueeze(-1).to(dtype=text_embeds.dtype)
+                masked_embeddings = text_embeds * attention_mask
+                sum_mask = attention_mask.sum(dim=1).clamp(min=1e-9)
+                pooled_text_embeds = torch.sum(masked_embeddings, dim=1) / sum_mask
+            else:
+                pooled_text_embeds = text_embeds.mean(dim=1)
+            
+            # Project to common space and normalize
+            text_features = self.custom_text_proj(pooled_text_embeds)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        
+        # Handle different cases
+        if input_ids is not None and pixel_values is not None:
+            # For training with both modalities - BiEncoderLoss expects two tensors
+            return text_features, image_features
+        elif input_ids is not None:
+            # Text only
+            return text_features
+        elif pixel_values is not None:
+            # Image only
+            return image_features
+        else:
+            raise ValueError("Either pixel_values or input_ids must be provided")
